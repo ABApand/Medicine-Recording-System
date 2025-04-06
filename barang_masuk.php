@@ -7,6 +7,7 @@ if (!isset($_SESSION['username'])) {
 
 include 'config.php';
 
+
 // Tampilkan error MySQL sebagai exception
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
@@ -186,6 +187,30 @@ if ($result->num_rows > 0) {
             grid-template-columns: 1fr;
         }
     }
+    .pagination-btn {
+    display: inline-block;
+    margin: 0 3px;
+    padding: 6px 12px;
+    border: 1px solid #28a745;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #28a745;
+    font-weight: bold;
+    background-color: #fff;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.pagination-btn:hover {
+    background-color: #28a745;
+    color: #fff;
+}
+
+.pagination-btn.active {
+    background-color: #28a745;
+    color: #fff;
+    pointer-events: none;
+}
+
 </style>
 </head>
 <body>
@@ -205,26 +230,39 @@ if ($result->num_rows > 0) {
 
         <div class="table-container">
             <table id="barang-table">
-                <thead>
-                    <tr>
-                        <th>Nama Item</th>
-                        <th>Takaran</th>
-                        <th>UoM</th>
-                        <th>Jumlah Tablet</th>
-                        <th>Kadaluarsa</th>
-                        <th>No Rak</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><input type="text" name="nama_item[]"></td>
-                        <td><input type="text" name="takaran[]"></td>
-                        <td><input type="text" name="uom[]"></td>
-                        <td><input type="number" name="jumlah_tablet[]"></td>
-                        <td><input type="date" name="kadaluarsa[]"></td>
-                        <td><input type="text" name="no_rak[]"></td>
-                    </tr>
-                </tbody>
+            <thead>
+    <tr>
+        <th>Nama Item</th>
+        <th>Takaran</th>
+        <th>UoM</th>
+        <th>Jumlah</th>
+        <th>Kadaluarsa</th>
+        <th>No Rak</th>
+        <th>Aksi</th>
+    </tr>
+</thead>
+
+<tbody>
+    <tr>
+        <td><input type="text" name="nama_item[]"></td>
+        <td><input type="text" name="takaran[]"></td>
+        <td>
+            <select name="uom[]">
+                <option value="">-- Pilih --</option>
+                <option value="tablet">Tablet</option>
+                <option value="kapsul">Kapsul</option>
+                <option value="botol">Sirup</option>
+                <option value="sachet">Sachet</option>
+                <option value="tube">Tube</option>
+            </select>
+        </td>
+        <td><input type="number" name="jumlah_tablet[]"></td>
+        <td><input type="date" name="kadaluarsa[]"></td>
+        <td><input type="text" name="no_rak[]"></td>
+        <td><button type="button" onclick="hapusBaris(this)">❌</button></td>
+    </tr>
+</tbody>
+
             </table>
             <button type="button" class="btn-tambah" onclick="tambahBaris()">Tambah Baris</button>
         </div>
@@ -245,7 +283,18 @@ if ($result->num_rows > 0) {
         </thead>
         <tbody>
             <?php
-            $stok_produk = $conn->query("SELECT * FROM produk ORDER BY nama_item ASC");
+            $limit = 10;
+            $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+            $start = ($page - 1) * $limit;
+            
+            // Ambil total produk untuk hitung jumlah halaman
+            $total_result = $conn->query("SELECT COUNT(*) as total FROM produk");
+            $total_row = $total_result->fetch_assoc();
+            $total_items = $total_row['total'];
+            $total_pages = ceil($total_items / $limit);
+            
+            // Ambil data produk terbaru (berdasarkan ID atau created_at DESC)
+            $stok_produk = $conn->query("SELECT * FROM produk ORDER BY id DESC LIMIT $start, $limit");
             if ($stok_produk->num_rows > 0):
                 while ($row = $stok_produk->fetch_assoc()):
             ?>
@@ -261,7 +310,22 @@ if ($result->num_rows > 0) {
             ?>
             <tr><td colspan="4" style="text-align:center; color:gray;">Belum ada data stok.</td></tr>
             <?php endif; ?>
-        </tbody>
+            </tbody>
+</table>
+
+<!-- Navigasi Pagination -->
+<div style="text-align:center; margin-top:10px;">
+<?php if ($page > 1): ?>
+            <a href="?page=<?= $page - 1 ?>" class="pagination-btn">&laquo; Prev</a>
+        <?php endif; ?>
+    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+            <a href="?page=<?= $i ?>" class="pagination-btn <?= ($i == $page) ? 'active' : '' ?>"><?= $i ?></a>
+        <?php endfor; ?>
+        <?php if ($page < $total_pages): ?>
+            <a href="?page=<?= $page + 1 ?>" class="pagination-btn">Next &raquo;</a>
+        <?php endif; ?>
+</div>
+
     </table>
 </div>
 </div>
@@ -281,6 +345,83 @@ function tambahBaris() {
         cell.appendChild(input);
     }
 }
+
+
+function hapusBaris(btn) {
+    const row = btn.closest("tr");
+    const tbody = row.parentElement;
+    if (tbody.rows.length > 1) {
+        tbody.removeChild(row);
+    } else {
+        alert("Minimal satu baris harus ada.");
+    }
+}
+
+
+function tambahBaris() {
+    const table = document.getElementById('barang-table').getElementsByTagName('tbody')[0];
+    const row = table.insertRow();
+
+    const kolom = ["nama_item", "takaran", "uom", "jumlah_tablet", "kadaluarsa", "no_rak"];
+    for (let i = 0; i < kolom.length; i++) {
+        const cell = row.insertCell(i);
+        let input;
+        if (kolom[i] === "uom") {
+            input = document.createElement("select");
+            input.name = "uom[]";
+            input.innerHTML = `
+                <option value="">-- Pilih --</option>
+                <option value="tablet">tablet</option>
+                <option value="kapsul">kapsul</option>
+                <option value="botol">botol</option>
+                <option value="sachet">sachet</option>
+                <option value="tube">tube</option>
+            `;
+        } else {
+            input = document.createElement("input");
+            input.name = kolom[i] + "[]";
+            input.type = (kolom[i] === "jumlah_tablet") ? "number" : (kolom[i] === "kadaluarsa") ? "date" : "text";
+        }
+        cell.appendChild(input);
+    }
+
+    const aksiCell = row.insertCell(kolom.length);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerHTML = "❌";
+    btn.onclick = function () { hapusBaris(this); };
+    aksiCell.appendChild(btn);
+}
+
+document.querySelector("form").addEventListener("submit", function(e) {
+    const rows = document.querySelectorAll("#barang-table tbody tr");
+    let valid = true;
+
+    rows.forEach(row => {
+        const inputs = row.querySelectorAll("input, select");
+        inputs.forEach(input => {
+            if (input.value.trim() === "") {
+                valid = false;
+                input.style.border = "2px solid red";
+            } else {
+                input.style.border = "1px solid #ccc";
+            }
+        });
+
+        // Cek khusus UoM (dropdown harus dipilih)
+        const uomSelect = row.querySelector('select[name="uom[]"]');
+        if (uomSelect && uomSelect.value === "") {
+            valid = false;
+            uomSelect.style.border = "2px solid red";
+        }
+    });
+
+    if (!valid) {
+        alert("❗ Semua kolom harus diisi, termasuk pilihan UoM.");
+        e.preventDefault();
+    }
+});
+
 </script>
 
 </body>
